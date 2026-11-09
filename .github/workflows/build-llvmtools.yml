@@ -1,0 +1,88 @@
+name: build-llvmtools
+
+on:
+  push:
+    branches: [main]
+    tags: ["llvm-*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      llvm_version:
+        description: "llvm-project tag to build (e.g. 20.1.8)"
+        required: false
+        default: "20.1.8"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-llvmtools-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LLVM_VERSION: ${{ github.event.inputs.llvm_version || '20.1.8' }}
+  # 用 -O2 覆盖 Release，Docker/CI 上更稳，且和发行版打补丁后的行为一致。
+  # 通过 CMAKE_*_FLAGS_RELEASE（非 INIT）覆盖，脚本里会带回 -DNDEBUG。
+  OPT_FLAG: "-O2"
+  INSTALL_PREFIX: ${{ github.workspace }}/out/llvmtools
+  BUILD_DIR: ${{ github.workspace }}/build-llvm
+  SRC_DIR: ${{ github.workspace }}/llvm-project
+  LINK_JOBS: "1"
+  SOURCE_DATE_EPOCH: "1704067200"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false
+          swap-storage: true
+
+      - uses: actions/checkout@v4
+
+      - name: Install host LLVM 20 + tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake zstd wget lsb-release software-properties-common
+          wget -q https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 20
+          echo "LLVM_BINDIR=/usr/lib/llvm-20/bin" >> "$GITHUB_ENV"
+          /usr/lib/llvm-20/bin/clang --version
+
+      - name: Build llvmtools
+        run: bash scripts/build.sh
+
+      - name: Package
+        run: bash scripts/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llvmtools-${{ env.LLVM_VERSION }}
+          path: |
+            dist/*.tar.zst
+            dist/SHA256SUMS
+          retention-days: 14
+          compression-level: 0
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: llvmtools-${{ env.LLVM_VERSION }}
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.zst
+            dist/SHA256SUMS
+          generate_release_notes: true
