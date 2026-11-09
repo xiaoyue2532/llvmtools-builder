@@ -23,7 +23,7 @@ env:
   INSTALL_PREFIX: ${{ github.workspace }}/out/llvmtools
   BUILD_DIR: ${{ github.workspace }}/build-llvm
   SRC_DIR: ${{ github.workspace }}/llvm-project
-  LINK_JOBS: "1"
+  # LINK_JOBS: "1"
   SOURCE_DATE_EPOCH: "1704067200"
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
           large-packages: false
           swap-storage: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install matching host LLVM + tools
         run: |
@@ -49,8 +49,8 @@ jobs:
             exit 1
           fi
 
-          sudo apt-get update
-          sudo apt-get install -y ninja-build cmake zstd wget lsb-release software-properties-common
+          sudo apt update
+          sudo apt install -y cmake mold ninja-build
           wget -q https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
           chmod +x /tmp/llvm.sh
           sudo /tmp/llvm.sh "$LLVM_MAJOR"
@@ -66,21 +66,20 @@ jobs:
       - name: Package
         run: bash scripts/package.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: llvmtools-${{ env.LLVM_VERSION }}
           path: |
-            dist/*.tar.zst
-            dist/SHA256SUMS
+            dist/llvmtools-${{ env.LLVM_VERSION }}-x86_64-pc-linux-gnu.tar.zst
           retention-days: 14
-          compression-level: 0
+          archive: false
 
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: llvmtools-${{ env.LLVM_VERSION }}
           path: dist
@@ -88,6 +87,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.tar.zst
-            dist/SHA256SUMS
+            dist/llvmtools-${{ env.LLVM_VERSION }}-x86_64-pc-linux-gnu.tar.zst
           generate_release_notes: true
