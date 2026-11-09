@@ -13,7 +13,11 @@ INSTALL_PREFIX="${INSTALL_PREFIX:-/llvmtools}"
 SRC_DIR="${SRC_DIR:-$PWD/llvm-project}"
 BUILD_DIR="${BUILD_DIR:-$PWD/build-llvm}"
 OPT_FLAG="${OPT_FLAG:--O2}"
-LINK_JOBS="${LINK_JOBS:-1}"
+
+# [Github Hosted Runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+# says memory is 16 GB, which seems to be enough.
+# LINK_JOBS="${LINK_JOBS:-1}"
+
 JOBS="${JOBS:-$(command -v nproc >/dev/null && nproc || getconf _NPROCESSORS_ONLN)}"
 
 if [[ -z "${LLVM_BINDIR:-}" ]]; then
@@ -44,7 +48,6 @@ extra_args=(
   -DCMAKE_RANLIB="$LLVM_BINDIR/llvm-ranlib"
   -DCMAKE_C_FLAGS_RELEASE="$OPT_FLAG -DNDEBUG"
   -DCMAKE_CXX_FLAGS_RELEASE="$OPT_FLAG -DNDEBUG"
-  -DCMAKE_ASM_FLAGS_RELEASE="$OPT_FLAG"
   -DCLANG_DEFAULT_CXX_STDLIB=libc++
   -DCLANG_DEFAULT_LINKER=lld
   -DCLANG_DEFAULT_OBJCOPY=llvm-objcopy
@@ -62,10 +65,9 @@ extra_args=(
   -DLLVM_ENABLE_LLD=ON
   -DLLVM_ENABLE_LIBEDIT=OFF
   -DLLVM_ENABLE_LIBXML2=OFF
-  -DLLVM_ENABLE_ASSERTIONS=OFF
   -DLLVM_INCLUDE_TESTS=OFF
   -DLLVM_INCLUDE_EXAMPLES=OFF
-  -DLLVM_PARALLEL_LINK_JOBS="$LINK_JOBS"
+  # -DLLVM_PARALLEL_LINK_JOBS="$LINK_JOBS"
 )
 
 cmake \
