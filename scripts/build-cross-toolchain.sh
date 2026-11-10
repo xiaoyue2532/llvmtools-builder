@@ -21,6 +21,7 @@ RESOURCE_DIR="$TOOLCHAIN_ROOT/lib/clang/$LLVM_MAJOR"
 LLVM_SRC="$WORK_DIR/llvm-project"
 LINUX_SRC="$WORK_DIR/linux"
 MUSL_SRC="$WORK_DIR/musl"
+export PATH="$BIN_DIR:$PATH"
 
 checkout_commit() {
   local repository="$1"
