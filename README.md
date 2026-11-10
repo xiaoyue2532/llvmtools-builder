@@ -33,7 +33,7 @@ string(APPEND CMAKE_${lang}_FLAGS_RELEASE_INIT " -DNDEBUG")
 sudo pacman -S clang llvm lld ninja cmake zstd   # Arch
 export LLVM_BINDIR=/usr/lib/llvm20/bin           # 可选，默认自动探测 `command -v clang`
 export INSTALL_PREFIX=/llvmtools                 # 需要写 / 时用 sudo 或改这里
-bash scripts/build.sh
+bash scripts/build-llvmtools.sh
 bash scripts/package.sh
 ```
 

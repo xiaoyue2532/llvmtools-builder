@@ -61,7 +61,7 @@ jobs:
           "$LLVM_BINDIR/clang" --version | grep -Eq "clang version ${LLVM_MAJOR}\."
 
       - name: Build llvmtools
-        run: bash scripts/build.sh
+        run: bash scripts/build-llvmtools.sh
 
       - name: Package
         run: bash scripts/package.sh
