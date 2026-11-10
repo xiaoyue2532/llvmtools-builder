@@ -41,7 +41,23 @@ link_tool() {
 }
 
 case "$TARGET_TRIPLE" in
-  arm-unknown-linux-musleabihf|aarch64-unknown-linux-musl|x86_64-unknown-linux-musl)
+  arm-unknown-linux-musleabihf)
+    ;;
+  aarch64-unknown-linux-musl)   
+    ;;
+  x86_64-unknown-linux-musl)
+    ;;
+  riscv64-lp64-linux-musl)
+    ;;
+  riscv64-lp64f-linux-musl)
+    ;;
+  riscv64-lp64d-linux-musl)
+    ;;
+  riscv32-ilp32-linux-musl)
+    ;;
+  riscv32-ilp32f-linux-musl)
+    ;;
+  riscv32-ilp32d-linux-musl)
     ;;
   *)
     echo "unsupported target: $TARGET_TRIPLE" >&2

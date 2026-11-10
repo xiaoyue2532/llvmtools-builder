@@ -93,6 +93,36 @@ jobs:
             compiler_rt_arch: x86_64
             target_flags: -march=x86-64
             qemu: native
+          - triple: riscv64-lp64-linux-musl
+            kernel_arch: riscv
+            compiler_rt_arch: riscv64
+            target_flags: -mabi=lp64
+            qemu: qemu-riscv64
+          - triple: riscv64-lp64f-linux-musl
+            kernel_arch: riscv
+            compiler_rt_arch: riscv64
+            target_flags: -mabi=lp64f
+            qemu: qemu-riscv64
+          - triple: riscv64-lp64d-linux-musl
+            kernel_arch: riscv
+            compiler_rt_arch: riscv64
+            target_flags: -mabi=lp64d
+            qemu: qemu-riscv64
+          - triple: riscv32-ilp32-linux-musl
+            kernel_arch: riscv
+            compiler_rt_arch: riscv32
+            target_flags: -mabi=ilp32
+            qemu: qemu-riscv32
+          - triple: riscv32-ilp32f-linux-musl
+            kernel_arch: riscv
+            compiler_rt_arch: riscv32
+            target_flags: -mabi=ilp32f
+            qemu: qemu-riscv32
+          - triple: riscv32-ilp32d-linux-musl
+            kernel_arch: riscv
+            compiler_rt_arch: riscv32
+            target_flags: -mabi=ilp32d
+            qemu: qemu-riscv32
 
     env:
       TARGET_TRIPLE: ${{ matrix.triple }}
