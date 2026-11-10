@@ -58,6 +58,8 @@ run ID 和 LLVM 版本，即可反复复用该 artifact，不会重新编译 LLV
 - `x86_64-unknown-linux-musl`
 
 每个矩阵任务依次构建 Linux 6.18 headers、维护在
-`xiaoyue2532/musl` 的 musl 1.2.6、compiler-rt 和 LLVM runtimes。产物中的
-Clang 配置使用 `<CFGDIR>` 相对定位 sysroot，因此工具链不要求安装到
-`/llvmtools`。
+`xiaoyue2532/musl` 的 musl 1.2.6、bootstrap compiler-rt 和 LLVM runtimes。
+首轮 runtimes 安装后，sysroot 会建立 `usr -> .` 链接，再进行一次不跳过编译器
+检查、并启用 ORC/XRay 的完整 runtimes 重建。产物中的 Clang 配置使用
+`<CFGDIR>` 相对定位 sysroot，不写入 libc++ 的绝对搜索路径，因此工具链不要求
+安装到 `/llvmtools`。

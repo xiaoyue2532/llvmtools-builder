@@ -86,7 +86,6 @@ link_tool llvm-strings strings
 link_tool llvm-strip strip
 
 cat > "$BIN_DIR/$TARGET_TRIPLE.cfg" <<EOF
---target=$TARGET_TRIPLE
 $TARGET_FLAGS
 --sysroot=<CFGDIR>/../$TARGET_TRIPLE
 EOF
@@ -126,10 +125,9 @@ cmake -G Ninja \
   -DCMAKE_CXX_COMPILER="$CXX" \
   -DCMAKE_CXX_COMPILER_TARGET="$TARGET_TRIPLE" \
   -DCMAKE_CXX_COMPILER_WORKS=ON \
-  -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
   -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
-  -DCOMPILER_RT_BUILD_CRT=ON \
   -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+  -DCOMPILER_RT_BUILD_GWP_ASAN=OFF \
   -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
   -DCOMPILER_RT_BUILD_MEMPROF=OFF \
   -DCOMPILER_RT_BUILD_ORC=OFF \
@@ -160,22 +158,53 @@ mkdir -p "$WORK_DIR/build-musl"
   make DESTDIR="$SYSROOT" install
 )
 
-echo "==> Build LLVM runtimes"
-cmake -G Ninja \
-  -S "$LLVM_SRC/runtimes" \
-  -B "$WORK_DIR/build-runtimes" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX="$SYSROOT" \
-  -DCMAKE_ASM_COMPILER="$CC" \
-  -DCMAKE_ASM_COMPILER_TARGET="$TARGET_TRIPLE" \
-  -DCMAKE_C_COMPILER="$CC" \
-  -DCMAKE_C_COMPILER_TARGET="$TARGET_TRIPLE" \
+runtime_cmake_args=(
+  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_INSTALL_PREFIX="$SYSROOT"
+  -DCMAKE_AR="$BIN_DIR/llvm-ar"
+  -DCMAKE_NM="$BIN_DIR/llvm-nm"
+  -DCMAKE_RANLIB="$BIN_DIR/llvm-ranlib"
+  -DCMAKE_ASM_COMPILER="$CC"
+  -DCMAKE_ASM_COMPILER_TARGET="$TARGET_TRIPLE"
+  -DCMAKE_C_COMPILER="$CC"
+  -DCMAKE_C_COMPILER_TARGET="$TARGET_TRIPLE"
+  -DCMAKE_CXX_COMPILER="$CXX"
+  -DCMAKE_CXX_COMPILER_TARGET="$TARGET_TRIPLE"
+  -DCMAKE_SYSROOT="$SYSROOT"
+  -DCMAKE_C_FLAGS="-D_LARGEFILE64_SOURCE"
+  -DCMAKE_CXX_FLAGS="-D_LARGEFILE64_SOURCE"
+  -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON
+  -DCOMPILER_RT_BUILD_GWP_ASAN=OFF
+  -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON
+  -DCOMPILER_RT_USE_LLVM_UNWINDER=ON
+  -DCOMPILER_RT_INSTALL_PATH="$RESOURCE_DIR"
+  -DLIBCXXABI_ENABLE_STATIC_UNWINDER=ON
+  -DLIBCXXABI_USE_COMPILER_RT=ON
+  -DLIBCXXABI_USE_LLVM_UNWINDER=ON
+  -DLIBCXX_CXX_ABI=libcxxabi
+  -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON
+  -DLIBCXX_HAS_MUSL_LIBC=ON
+  -DLIBCXX_USE_COMPILER_RT=ON
+  '-DLLVM_ENABLE_RUNTIMES=libcxx;libcxxabi;libunwind;compiler-rt'
+)
+
+build_runtimes() {
+  local build_dir="$1"
+  shift
+
+  cmake -G Ninja \
+    -S "$LLVM_SRC/runtimes" \
+    -B "$build_dir" \
+    "${runtime_cmake_args[@]}" \
+    "$@"
+  cmake --build "$build_dir" --parallel "$JOBS"
+  cmake --build "$build_dir" --target install/strip
+}
+
+echo "==> Build bootstrap LLVM runtimes"
+build_runtimes "$WORK_DIR/build-runtimes-bootstrap" \
   -DCMAKE_C_COMPILER_WORKS=ON \
-  -DCMAKE_CXX_COMPILER="$CXX" \
-  -DCMAKE_CXX_COMPILER_TARGET="$TARGET_TRIPLE" \
   -DCMAKE_CXX_COMPILER_WORKS=ON \
-  -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
-  -DCOMPILER_RT_BUILD_CRT=ON \
   -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
   -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
   -DCOMPILER_RT_BUILD_MEMPROF=OFF \
@@ -183,26 +212,14 @@ cmake -G Ninja \
   -DCOMPILER_RT_BUILD_PROFILE=OFF \
   -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
   -DCOMPILER_RT_BUILD_XRAY=OFF \
-  -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
-  -DCOMPILER_RT_INSTALL_PATH="$RESOURCE_DIR" \
-  -DCXX_SUPPORTS_FNO_EXCEPTIONS_FLAG=ON \
-  -DLIBCXXABI_ENABLE_STATIC_UNWINDER=ON \
-  -DLIBCXXABI_USE_COMPILER_RT=ON \
-  -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
-  -DLIBCXX_CXX_ABI=libcxxabi \
-  -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON \
-  -DLIBCXX_HAS_MUSL_LIBC=ON \
-  -DLIBCXX_USE_COMPILER_RT=ON \
-  -DLIBUNWIND_USE_COMPILER_RT=ON \
-  -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi;libunwind;compiler-rt'
-cmake --build "$WORK_DIR/build-runtimes" --parallel "$JOBS"
-cmake --build "$WORK_DIR/build-runtimes" --target install/strip
+  -DCXX_SUPPORTS_FNO_EXCEPTIONS_FLAG=ON
 
-cat >> "$BIN_DIR/$TARGET_TRIPLE.cfg" <<EOF
--nostdinc++
--isystem <CFGDIR>/../$TARGET_TRIPLE/include/c++/v1
--isystem <CFGDIR>/../$TARGET_TRIPLE/include
-EOF
+# Let Clang's normal <sysroot>/usr/include search find the headers without
+# baking installation paths into the target configuration file.
+ln -sfn . "$SYSROOT/usr"
+
+echo "==> Rebuild LLVM runtimes with the bootstrapped C++ runtime"
+build_runtimes "$WORK_DIR/build-runtimes-final"
 
 echo "==> Smoke test"
 cat > "$WORK_DIR/hello.c" <<'EOF'

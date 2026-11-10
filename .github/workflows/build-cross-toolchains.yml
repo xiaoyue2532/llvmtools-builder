@@ -81,7 +81,7 @@ jobs:
           - triple: arm-unknown-linux-musleabihf
             kernel_arch: arm
             compiler_rt_arch: armhf
-            target_flags: -march=armv7-a -mtune=cortex-a7
+            target_flags: -march=armv7-a
             qemu: qemu-arm
           - triple: aarch64-unknown-linux-musl
             kernel_arch: arm64
