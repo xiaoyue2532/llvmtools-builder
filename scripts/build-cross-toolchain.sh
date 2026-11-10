@@ -218,6 +218,15 @@ runtime_cmake_args=(
   -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt"
 )
 
+# HWASan's RISC-V interceptors only implement soft-float and double-float
+# register restoration.  The lp64f ABI otherwise falls through to the
+# "Unsupported case" error in hwasan_interceptors.cpp.
+if [[ "$TARGET_TRIPLE" == riscv64-lp64f-linux-musl ]]; then
+  runtime_cmake_args+=(
+    -DCOMPILER_RT_HWASAN_WITH_INTERCEPTORS=OFF
+  )
+fi
+
 build_runtimes() {
   local build_dir="$1"
   shift
