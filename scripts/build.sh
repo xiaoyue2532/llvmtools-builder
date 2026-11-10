@@ -54,6 +54,8 @@ extra_args=(
   -DCLANG_DEFAULT_RTLIB=compiler-rt
   -DCLANG_DEFAULT_UNWINDLIB=libunwind
   -DENABLE_LINKER_BUILD_ID=ON
+  # No append git repo and commit hash
+  -DLLVM_APPEND_VC_REV=OFF
   -DLLVM_BUILD_LLVM_DYLIB=ON
   -DLLVM_DEFAULT_TARGET_TRIPLE="x86_64-pc-linux-gnu"
   -DLLVM_ENABLE_PROJECTS="clang;lld"
