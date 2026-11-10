@@ -186,5 +186,5 @@ jobs:
           name: llvmtools-${{ inputs.llvm_version }}-${{ matrix.triple }}
           path: dist/${{ matrix.triple }}/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
           compression-level: 0

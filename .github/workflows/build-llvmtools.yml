@@ -72,7 +72,7 @@ jobs:
           path: |
             dist/*.tar.zst
             dist/SHA256SUMS
-          retention-days: 14
+          retention-days: 3
           compression-level: 0
 
   release:
