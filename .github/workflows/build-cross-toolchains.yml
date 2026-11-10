@@ -1,0 +1,162 @@
+name: build-cross-toolchains
+
+on:
+  workflow_dispatch:
+    inputs:
+      host_run_id:
+        description: "Run ID that produced the host LLVM artifact"
+        required: true
+      llvm_version:
+        description: "LLVM version in that artifact (e.g. 22.1.8)"
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: build-cross-toolchains-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  LLVM_VERSION: ${{ inputs.llvm_version }}
+  LINUX_REPOSITORY: https://github.com/gregkh/linux.git
+  LINUX_REF: linux-6.18.y
+  MUSL_REPOSITORY: https://github.com/xiaoyue2532/musl.git
+  MUSL_REF: xiaoyue2532
+  SOURCE_DATE_EPOCH: "1704067200"
+
+jobs:
+  resolve-sources:
+    runs-on: ubuntu-24.04
+    outputs:
+      llvm_sha: ${{ steps.resolve.outputs.llvm_sha }}
+      linux_sha: ${{ steps.resolve.outputs.linux_sha }}
+      musl_sha: ${{ steps.resolve.outputs.musl_sha }}
+    steps:
+      - id: resolve
+        name: Resolve moving refs once
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          llvm_sha="$(git ls-remote https://github.com/llvm/llvm-project.git \
+            "refs/tags/llvmorg-${LLVM_VERSION}^{}" | awk 'NR == 1 { print $1 }')"
+          if [[ -z "$llvm_sha" ]]; then
+            llvm_sha="$(git ls-remote https://github.com/llvm/llvm-project.git \
+              "refs/tags/llvmorg-${LLVM_VERSION}" | awk 'NR == 1 { print $1 }')"
+          fi
+          linux_sha="$(git ls-remote "$LINUX_REPOSITORY" \
+            "refs/heads/${LINUX_REF}" | awk 'NR == 1 { print $1 }')"
+          musl_sha="$(git ls-remote "$MUSL_REPOSITORY" \
+            "refs/heads/${MUSL_REF}" | awk 'NR == 1 { print $1 }')"
+
+          [[ "$llvm_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::cannot resolve llvmorg-${LLVM_VERSION}"
+            exit 1
+          }
+          [[ "$linux_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::cannot resolve ${LINUX_REF}"
+            exit 1
+          }
+          [[ "$musl_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::cannot resolve ${MUSL_REF}"
+            exit 1
+          }
+
+          echo "llvm_sha=$llvm_sha" >> "$GITHUB_OUTPUT"
+          echo "linux_sha=$linux_sha" >> "$GITHUB_OUTPUT"
+          echo "musl_sha=$musl_sha" >> "$GITHUB_OUTPUT"
+
+          printf '%-8s %s\n' LLVM "$llvm_sha" Linux "$linux_sha" musl "$musl_sha"
+
+  build-target:
+    needs: resolve-sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: arm-unknown-linux-musleabihf
+            kernel_arch: arm
+            compiler_rt_arch: armhf
+            target_flags: -march=armv7-a -mtune=cortex-a7
+            qemu: qemu-arm
+          - triple: aarch64-unknown-linux-musl
+            kernel_arch: arm64
+            compiler_rt_arch: aarch64
+            target_flags: -march=armv8-a
+            qemu: qemu-aarch64
+          - triple: x86_64-unknown-linux-musl
+            kernel_arch: x86
+            compiler_rt_arch: x86_64
+            target_flags: -march=x86-64
+            qemu: native
+
+    env:
+      TARGET_TRIPLE: ${{ matrix.triple }}
+      KERNEL_ARCH: ${{ matrix.kernel_arch }}
+      COMPILER_RT_ARCH: ${{ matrix.compiler_rt_arch }}
+      TARGET_FLAGS: ${{ matrix.target_flags }}
+      QEMU: ${{ matrix.qemu }}
+      LLVM_SHA: ${{ needs.resolve-sources.outputs.llvm_sha }}
+      LINUX_SHA: ${{ needs.resolve-sources.outputs.linux_sha }}
+      MUSL_SHA: ${{ needs.resolve-sources.outputs.musl_sha }}
+      TOOLCHAIN_ROOT: ${{ github.workspace }}/toolchain/llvmtools
+      WORK_DIR: ${{ github.workspace }}/work
+      OUT_DIR: ${{ github.workspace }}/dist
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake file git make ninja-build python3 \
+            qemu-user rsync xz-utils zstd
+
+      - name: Download selected host LLVM run
+        uses: actions/download-artifact@v7
+        with:
+          name: llvmtools-${{ inputs.llvm_version }}
+          path: host-artifact
+          run-id: ${{ inputs.host_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify and extract host LLVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd host-artifact
+          sha256sum --check SHA256SUMS
+
+          archive="llvmtools-${LLVM_VERSION}-x86_64-pc-linux-gnu.tar.zst"
+          [[ -f "$archive" ]] || {
+            echo "::error::run ${HOST_RUN_ID} does not contain $archive"
+            exit 1
+          }
+
+          mkdir -p "$(dirname "$TOOLCHAIN_ROOT")"
+          tar --zstd -xf "$archive" -C "$(dirname "$TOOLCHAIN_ROOT")"
+
+          actual_version="$("$TOOLCHAIN_ROOT/bin/clang" -dumpversion)"
+          [[ "$actual_version" == "$LLVM_VERSION" ]] || {
+            echo "::error::requested LLVM $LLVM_VERSION but artifact contains $actual_version"
+            exit 1
+          }
+        env:
+          HOST_RUN_ID: ${{ inputs.host_run_id }}
+
+      - name: Build ${{ matrix.triple }} toolchain
+        run: bash scripts/build-cross-toolchain.sh
+
+      - name: Upload ${{ matrix.triple }} toolchain
+        uses: actions/upload-artifact@v7
+        with:
+          name: llvmtools-${{ inputs.llvm_version }}-${{ matrix.triple }}
+          path: dist/${{ matrix.triple }}/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

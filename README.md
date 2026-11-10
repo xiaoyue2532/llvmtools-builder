@@ -47,5 +47,17 @@ bash scripts/package.sh
 
 ## 后续
 
-`llvmtools` 只包含宿主的 clang/lld。交叉目标（`compiler-rt` → `musl` → `llvm-runtimes`）
-是另一个矩阵 job，可复用本仓库的 artifact 作为 `--prefix` 起点。
+宿主 LLVM 和交叉工具链是两个独立的手动 workflow。先运行
+`build-llvmtools` 一次；之后运行 `build-cross-toolchains`，输入宿主构建的
+run ID 和 LLVM 版本，即可反复复用该 artifact，不会重新编译 LLVM。
+
+首批交叉目标为：
+
+- `arm-unknown-linux-musleabihf`
+- `aarch64-unknown-linux-musl`
+- `x86_64-unknown-linux-musl`
+
+每个矩阵任务依次构建 Linux 6.18 headers、维护在
+`xiaoyue2532/musl` 的 musl 1.2.6、compiler-rt 和 LLVM runtimes。产物中的
+Clang 配置使用 `<CFGDIR>` 相对定位 sysroot，因此工具链不要求安装到
+`/llvmtools`。
