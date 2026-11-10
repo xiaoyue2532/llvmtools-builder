@@ -33,9 +33,9 @@ jobs:
 
     steps:
       - name: Free disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@v2
         with:
-          tool-cache: true
+          preinstalled-runtimes: true
           large-packages: false
           swap-storage: true
 
@@ -84,7 +84,7 @@ jobs:
           name: llvmtools-${{ env.LLVM_VERSION }}
           path: dist
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/llvmtools-${{ env.LLVM_VERSION }}-x86_64-pc-linux-gnu.tar.zst
