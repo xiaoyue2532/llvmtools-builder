@@ -70,9 +70,10 @@ jobs:
         with:
           name: llvmtools-${{ env.LLVM_VERSION }}
           path: |
-            dist/llvmtools-${{ env.LLVM_VERSION }}-x86_64-pc-linux-gnu.tar.zst
+            dist/*.tar.zst
+            dist/SHA256SUMS
           retention-days: 14
-          archive: false
+          compression-level: 0
 
   release:
     needs: build
